@@ -102,6 +102,10 @@ parse_args() {
                     log_error "--profile requires a name"
                     exit 1
                 fi
+                if [[ "$2" =~ [/\\] ]] || [[ "$2" == .* ]]; then
+                    log_error "Invalid profile name: $2 (must not contain path separators or start with .)"
+                    exit 1
+                fi
                 PROFILE_NAME="$2"
                 shift 2
                 ;;

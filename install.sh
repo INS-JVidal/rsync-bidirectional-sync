@@ -47,7 +47,7 @@ check_requirements() {
         info "Bash ${BASH_VERSION} (4.0+ required)"
     else
         error "Bash 4.0+ required (current: ${BASH_VERSION})"
-        (( errors++ ))
+        errors=$(( errors + 1 ))
     fi
 
     # rsync
@@ -57,7 +57,7 @@ check_requirements() {
         info "rsync $rsync_ver found"
     else
         error "rsync is not installed. Install: sudo apt install rsync"
-        (( errors++ ))
+        errors=$(( errors + 1 ))
     fi
 
     # ssh
@@ -65,7 +65,7 @@ check_requirements() {
         info "ssh found"
     else
         error "ssh is not installed. Install: sudo apt install openssh-client"
-        (( errors++ ))
+        errors=$(( errors + 1 ))
     fi
 
     # md5sum (for checksum verification)
@@ -81,7 +81,7 @@ check_requirements() {
             info "$cmd found"
         else
             error "$cmd is not installed"
-            (( errors++ ))
+            errors=$(( errors + 1 ))
         fi
     done
 
@@ -209,12 +209,12 @@ setup_path() {
                 echo "# Added by rsync-bidirectional-sync installer" >> "$rc_file"
                 echo "$path_line" >> "$rc_file"
                 info "Updated: $rc_file"
-                (( shells_updated++ ))
+                shells_updated=$(( shells_updated + 1 ))
             fi
         fi
     done
 
-    if (( shells_updated > 0 )); then
+    if [[ "$shells_updated" -gt 0 ]]; then
         warn "Restart your shell or run: source ~/.bashrc"
     fi
 }

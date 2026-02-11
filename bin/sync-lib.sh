@@ -68,7 +68,7 @@ _should_log() {
     local msg_int configured_int
     msg_int=$(_log_level_to_int "$msg_level")
     configured_int=$(_log_level_to_int "$configured_level")
-    (( msg_int >= configured_int ))
+    [[ "$msg_int" -ge "$configured_int" ]]
 }
 
 _log() {
@@ -166,7 +166,7 @@ load_config() {
         return 1
     fi
 
-    if [[ "$(stat -c%a "$config_file" 2>/dev/null)" =~ [0-7]*[0-7][67] ]]; then
+    if [[ "$(stat -c%a "$config_file" 2>/dev/null)" =~ [0-7]*[0-7][4-7] ]]; then
         log_warn "Config file $config_file is world-readable. Consider: chmod 600 $config_file"
     fi
 
@@ -181,28 +181,28 @@ validate_config() {
     # Required fields
     if [[ -z "${REMOTE_USER:-}" ]]; then
         log_error "REMOTE_USER is not set"
-        (( errors++ ))
+        errors=$(( errors + 1 ))
     fi
 
     if [[ -z "${REMOTE_HOST:-}" ]]; then
         log_error "REMOTE_HOST is not set"
-        (( errors++ ))
+        errors=$(( errors + 1 ))
     fi
 
     if [[ -z "${LOCAL_DIR:-}" ]]; then
         log_error "LOCAL_DIR is not set"
-        (( errors++ ))
+        errors=$(( errors + 1 ))
     fi
 
     if [[ -z "${REMOTE_DIR:-}" ]]; then
         log_error "REMOTE_DIR is not set"
-        (( errors++ ))
+        errors=$(( errors + 1 ))
     fi
 
     # Validate local directory exists
     if [[ -n "${LOCAL_DIR:-}" ]] && [[ ! -d "$LOCAL_DIR" ]]; then
         log_error "LOCAL_DIR does not exist: $LOCAL_DIR"
-        (( errors++ ))
+        errors=$(( errors + 1 ))
     fi
 
     # Validate conflict strategy
@@ -210,14 +210,14 @@ validate_config() {
         newest|skip|backup|local|remote) ;;
         *)
             log_error "Invalid CONFLICT_STRATEGY: $CONFLICT_STRATEGY (must be: newest, skip, backup, local, remote)"
-            (( errors++ ))
+            errors=$(( errors + 1 ))
             ;;
     esac
 
     # Validate port
     if [[ -n "${REMOTE_PORT:-}" ]] && ! [[ "$REMOTE_PORT" =~ ^[0-9]+$ ]]; then
         log_error "REMOTE_PORT must be a number: $REMOTE_PORT"
-        (( errors++ ))
+        errors=$(( errors + 1 ))
     fi
 
     # Validate log level
@@ -225,7 +225,7 @@ validate_config() {
         DEBUG|INFO|WARN|ERROR) ;;
         *)
             log_error "Invalid LOG_LEVEL: $LOG_LEVEL (must be: DEBUG, INFO, WARN, ERROR)"
-            (( errors++ ))
+            errors=$(( errors + 1 ))
             ;;
     esac
 
@@ -255,7 +255,7 @@ check_connectivity() {
 
     # Ping might be blocked, try TCP connection to SSH port
     local port="${REMOTE_PORT:-22}"
-    if timeout "$timeout" bash -c "echo >/dev/tcp/$host/$port" 2>/dev/null; then
+    if timeout "$timeout" bash -c 'echo >/dev/tcp/"$1"/"$2"' -- "$host" "$port" 2>/dev/null; then
         log_debug "Host $host is reachable on port $port"
         return 0
     fi
@@ -334,7 +334,7 @@ check_remote_dir() {
         ssh_opts+=(-i "$SSH_IDENTITY")
     fi
 
-    if ssh "${ssh_opts[@]}" "${user}@${host}" "test -d '$remote_dir'"; then
+    if ssh "${ssh_opts[@]}" "${user}@${host}" "test -d $(shell_quote "$remote_dir")"; then
         log_debug "Remote directory exists: $remote_dir"
         return 0
     fi
@@ -352,10 +352,22 @@ build_ssh_cmd() {
     local port="${REMOTE_PORT:-22}"
     local timeout="${SSH_TIMEOUT:-10}"
 
+    _SSH_CMD=(ssh -o "ConnectTimeout=$timeout" -o "BatchMode=yes" -o "StrictHostKeyChecking=accept-new" -p "$port")
+
+    if [[ -n "${SSH_IDENTITY:-}" ]]; then
+        _SSH_CMD+=(-i "$SSH_IDENTITY")
+    fi
+}
+
+# Return ssh command as a string for use in rsync -e (rsync requires a single string)
+build_ssh_cmd_string() {
+    local port="${REMOTE_PORT:-22}"
+    local timeout="${SSH_TIMEOUT:-10}"
+
     local ssh_cmd="ssh -o ConnectTimeout=$timeout -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p $port"
 
     if [[ -n "${SSH_IDENTITY:-}" ]]; then
-        ssh_cmd+=" -i $SSH_IDENTITY"
+        ssh_cmd+=" -i '$SSH_IDENTITY'"
     fi
 
     echo "$ssh_cmd"
@@ -366,52 +378,48 @@ build_ssh_cmd() {
 # ============================================================================
 
 build_rsync_opts() {
-    local opts=()
+    _RSYNC_OPTS=()
 
-    opts+=(-a)                    # archive mode
-    opts+=(--partial)             # keep partial files for resume
-    opts+=(--progress)            # show progress
-    opts+=(--human-readable)      # human readable sizes
-    opts+=(--timeout="${RSYNC_TIMEOUT:-30}")
+    _RSYNC_OPTS+=(-a)                    # archive mode
+    _RSYNC_OPTS+=(--partial)             # keep partial files for resume
+    _RSYNC_OPTS+=(--progress)            # show progress
+    _RSYNC_OPTS+=(--human-readable)      # human readable sizes
+    _RSYNC_OPTS+=(--timeout="${RSYNC_TIMEOUT:-30}")
 
     if [[ -n "${BANDWIDTH_LIMIT:-}" ]]; then
-        opts+=(--bwlimit="$BANDWIDTH_LIMIT")
+        _RSYNC_OPTS+=(--bwlimit="$BANDWIDTH_LIMIT")
     fi
 
     if [[ -n "${MAX_FILE_SIZE:-}" ]]; then
-        opts+=(--max-size="$MAX_FILE_SIZE")
+        _RSYNC_OPTS+=(--max-size="$MAX_FILE_SIZE")
     fi
 
     if [[ "${VERBOSE:-false}" == "true" ]]; then
-        opts+=(-v --itemize-changes)
+        _RSYNC_OPTS+=(-v --itemize-changes)
     fi
 
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
-        opts+=(--dry-run)
+        _RSYNC_OPTS+=(--dry-run)
     fi
 
-    # Add SSH command
-    local ssh_cmd
-    ssh_cmd=$(build_ssh_cmd)
-    opts+=(-e "$ssh_cmd")
-
-    echo "${opts[@]}"
+    # Add SSH command as a single -e string for rsync
+    local ssh_cmd_str
+    ssh_cmd_str=$(build_ssh_cmd_string)
+    _RSYNC_OPTS+=(-e "$ssh_cmd_str")
 }
 
 build_exclusions() {
-    local exclusions=()
+    _RSYNC_EXCLUSIONS=()
 
     if [[ -n "${EXCLUDE_PATTERNS+x}" ]]; then
         for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-            exclusions+=(--exclude="$pattern")
+            _RSYNC_EXCLUSIONS+=(--exclude="$pattern")
         done
     fi
 
     # Always exclude the state/backup dirs
-    exclusions+=(--exclude=".sync-backups/")
-    exclusions+=(--exclude=".sync-state/")
-
-    echo "${exclusions[@]}"
+    _RSYNC_EXCLUSIONS+=(--exclude=".sync-backups/")
+    _RSYNC_EXCLUSIONS+=(--exclude=".sync-state/")
 }
 
 robust_rsync() {
@@ -421,29 +429,28 @@ robust_rsync() {
     local retry_delay="${RETRY_DELAY:-5}"
     local attempt=0
 
-    local rsync_opts
-    rsync_opts=$(build_rsync_opts)
-
-    local exclusions
-    exclusions=$(build_exclusions)
+    build_rsync_opts
+    build_exclusions
 
     while (( attempt < max_retries )); do
-        (( attempt++ ))
+        attempt=$(( attempt + 1 ))
 
         if (( attempt > 1 )); then
             log_warn "Retry attempt $attempt/$max_retries (waiting ${retry_delay}s)..."
             sleep "$retry_delay"
         fi
 
-        log_debug "rsync $rsync_opts $exclusions ${RSYNC_EXTRA_OPTS:-} $src $dst"
+        log_debug "rsync ${_RSYNC_OPTS[*]} ${_RSYNC_EXCLUSIONS[*]} ${RSYNC_EXTRA_OPTS:-} $src $dst"
 
+        local exit_code=0
         # shellcheck disable=SC2086
-        if rsync $rsync_opts $exclusions ${RSYNC_EXTRA_OPTS:-} "$src" "$dst"; then
+        rsync "${_RSYNC_OPTS[@]}" "${_RSYNC_EXCLUSIONS[@]}" ${RSYNC_EXTRA_OPTS:-} "$src" "$dst" || exit_code=$?
+
+        if [[ "$exit_code" -eq 0 ]]; then
             log_debug "rsync completed successfully"
             return 0
         fi
 
-        local exit_code=$?
         log_warn "rsync failed with exit code $exit_code (attempt $attempt/$max_retries)"
     done
 
@@ -457,24 +464,18 @@ rsync_push_file() {
     local remote_relative="$2"
     local remote_dest="${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/${remote_relative}"
 
-    local rsync_opts
-    rsync_opts=$(build_rsync_opts)
-
-    local ssh_cmd
-    ssh_cmd=$(build_ssh_cmd)
+    build_rsync_opts
+    build_ssh_cmd
 
     log_debug "Pushing: $remote_relative"
 
     # Ensure remote parent directory exists
     local remote_parent
     remote_parent=$(dirname "${REMOTE_DIR}/${remote_relative}")
-    ssh -o "BatchMode=yes" -p "${REMOTE_PORT:-22}" \
-        ${SSH_IDENTITY:+-i "$SSH_IDENTITY"} \
-        "${REMOTE_USER}@${REMOTE_HOST}" \
-        "mkdir -p '$remote_parent'" 2>/dev/null || true
+    "${_SSH_CMD[@]}" "${REMOTE_USER}@${REMOTE_HOST}" \
+        "mkdir -p $(shell_quote "$remote_parent")" 2>/dev/null || true
 
-    # shellcheck disable=SC2086
-    rsync $rsync_opts -e "$ssh_cmd" "$local_path" "$remote_dest"
+    rsync "${_RSYNC_OPTS[@]}" "$local_path" "$remote_dest"
 }
 
 # Transfer a single file from remote
@@ -483,11 +484,7 @@ rsync_pull_file() {
     local local_path="$2"
     local remote_src="${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/${remote_relative}"
 
-    local rsync_opts
-    rsync_opts=$(build_rsync_opts)
-
-    local ssh_cmd
-    ssh_cmd=$(build_ssh_cmd)
+    build_rsync_opts
 
     log_debug "Pulling: $remote_relative"
 
@@ -496,8 +493,7 @@ rsync_pull_file() {
     local_parent=$(dirname "$local_path")
     mkdir -p "$local_parent"
 
-    # shellcheck disable=SC2086
-    rsync $rsync_opts -e "$ssh_cmd" "$remote_src" "$local_path"
+    rsync "${_RSYNC_OPTS[@]}" "$remote_src" "$local_path"
 }
 
 # Delete a file on remote
@@ -511,12 +507,10 @@ remote_delete_file() {
         return 0
     fi
 
-    local ssh_cmd
-    ssh_cmd=$(build_ssh_cmd)
+    build_ssh_cmd
 
-    # shellcheck disable=SC2086
-    $ssh_cmd "${REMOTE_USER}@${REMOTE_HOST}" \
-        "rm -rf '${REMOTE_DIR}/${remote_relative}'" 2>/dev/null
+    "${_SSH_CMD[@]}" "${REMOTE_USER}@${REMOTE_HOST}" \
+        "rm -rf $(shell_quote "${REMOTE_DIR}/${remote_relative}")" 2>/dev/null
 }
 
 # Delete a local file
@@ -564,14 +558,14 @@ backup_remote_file() {
     local timestamp
     timestamp=$(date '+%Y%m%d_%H%M%S')
 
-    local ssh_cmd
-    ssh_cmd=$(build_ssh_cmd)
+    build_ssh_cmd
 
     local backup_path="${backup_base}/${relative_path}.${timestamp}"
+    local backup_parent
+    backup_parent=$(dirname "$backup_path")
 
-    # shellcheck disable=SC2086
-    $ssh_cmd "${REMOTE_USER}@${REMOTE_HOST}" \
-        "mkdir -p '$(dirname "$backup_path")' && cp -a '${REMOTE_DIR}/${relative_path}' '$backup_path'" 2>/dev/null || true
+    "${_SSH_CMD[@]}" "${REMOTE_USER}@${REMOTE_HOST}" \
+        "mkdir -p $(shell_quote "$backup_parent") && cp -a $(shell_quote "${REMOTE_DIR}/${relative_path}") $(shell_quote "$backup_path")" 2>/dev/null || true
 
     log_debug "Backed up remote: $relative_path"
 }
@@ -602,7 +596,14 @@ acquire_lock() {
         rm -f "$LOCK_FILE"
     fi
 
-    echo $$ > "$LOCK_FILE"
+    # Write PID atomically: write to temp file then rename
+    local tmplock="${LOCK_FILE}.$$"
+    echo $$ > "$tmplock"
+    if ! mv "$tmplock" "$LOCK_FILE" 2>/dev/null; then
+        rm -f "$tmplock"
+        log_error "Failed to acquire lock: $LOCK_FILE"
+        return 1
+    fi
     log_debug "Lock acquired: $LOCK_FILE (PID $$)"
     return 0
 }
@@ -639,6 +640,13 @@ setup_signal_handlers() {
 # UTILITY FUNCTIONS
 # ============================================================================
 
+# Escape a string for safe use inside single quotes in remote shell commands
+# Replaces ' with '\'' (end quote, escaped quote, start quote)
+shell_quote() {
+    local s="$1"
+    printf '%s' "'${s//\'/\'\\\'\'}'"
+}
+
 # Check if a command exists
 require_command() {
     local cmd="$1"
@@ -652,16 +660,16 @@ require_command() {
 check_prerequisites() {
     local errors=0
 
-    require_command rsync || (( errors++ ))
-    require_command ssh || (( errors++ ))
-    require_command find || (( errors++ ))
-    require_command stat || (( errors++ ))
-    require_command sort || (( errors++ ))
+    require_command rsync || errors=$(( errors + 1 ))
+    require_command ssh || errors=$(( errors + 1 ))
+    require_command find || errors=$(( errors + 1 ))
+    require_command stat || errors=$(( errors + 1 ))
+    require_command sort || errors=$(( errors + 1 ))
 
     # Check bash version (need 4+ for associative arrays)
     if (( BASH_VERSINFO[0] < 4 )); then
         log_error "Bash 4.0+ is required (current: ${BASH_VERSION})"
-        (( errors++ ))
+        errors=$(( errors + 1 ))
     fi
 
     if (( errors > 0 )); then
@@ -725,11 +733,11 @@ print_summary() {
 format_bytes() {
     local bytes="$1"
     if (( bytes >= 1073741824 )); then
-        printf "%.1fG" "$(echo "$bytes / 1073741824" | bc -l)"
+        printf "%d.%01dG" "$(( bytes / 1073741824 ))" "$(( (bytes % 1073741824) * 10 / 1073741824 ))"
     elif (( bytes >= 1048576 )); then
-        printf "%.1fM" "$(echo "$bytes / 1048576" | bc -l)"
+        printf "%d.%01dM" "$(( bytes / 1048576 ))" "$(( (bytes % 1048576) * 10 / 1048576 ))"
     elif (( bytes >= 1024 )); then
-        printf "%.1fK" "$(echo "$bytes / 1024" | bc -l)"
+        printf "%d.%01dK" "$(( bytes / 1024 ))" "$(( (bytes % 1024) * 10 / 1024 ))"
     else
         printf "%dB" "$bytes"
     fi

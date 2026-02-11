@@ -75,8 +75,20 @@ load_config_values() {
     SSH_IDENTITY=""
 
     if [[ -f "$config_file" ]]; then
-        # Source config in a subshell to extract values safely
-        eval "$(grep -E '^(REMOTE_USER|REMOTE_HOST|REMOTE_PORT|SSH_IDENTITY)=' "$config_file" 2>/dev/null)" || true
+        # Read specific config values safely using a while loop
+        while IFS='=' read -r key value; do
+            # Strip surrounding quotes from the value
+            value="${value#\"}"
+            value="${value%\"}"
+            value="${value#\'}"
+            value="${value%\'}"
+            case "$key" in
+                REMOTE_USER) REMOTE_USER="$value" ;;
+                REMOTE_HOST) REMOTE_HOST="$value" ;;
+                REMOTE_PORT) REMOTE_PORT="$value" ;;
+                SSH_IDENTITY) SSH_IDENTITY="$value" ;;
+            esac
+        done < <(grep -E '^(REMOTE_USER|REMOTE_HOST|REMOTE_PORT|SSH_IDENTITY)=' "$config_file" 2>/dev/null)
     fi
 }
 
@@ -208,7 +220,7 @@ test_ssh_password() {
     local user="$1" host="$2" port="$3"
 
     # Test if we can reach the host at all
-    if ! timeout 5 bash -c "echo >/dev/tcp/$host/$port" 2>/dev/null; then
+    if ! timeout 5 bash -c 'echo >/dev/tcp/"$1"/"$2"' -- "$host" "$port" 2>/dev/null; then
         error "Cannot reach $host on port $port"
         error "Ensure the remote machine is on, SSH server is running, and no firewall is blocking"
         return 1
@@ -297,7 +309,7 @@ setup_reverse_direction() {
     echo ""
 
     # Check if local SSH server is running
-    if ! timeout 3 bash -c "echo >/dev/tcp/localhost/22" 2>/dev/null; then
+    if ! timeout 3 bash -c 'echo >/dev/tcp/localhost/22' 2>/dev/null; then
         warn "No SSH server detected on this machine (port 22)"
         echo ""
         printf "  ${C_YELLOW}To install and start SSH server:${C_RESET}\n"

@@ -93,27 +93,30 @@ generate_remote_manifest() {
     exclude_script+=" -not -path '*/.sync-state' -not -path '*/.sync-state/*'"
 
     # Run find+stat on remote and pipe back
-    # We use a heredoc-style remote script for reliability
-    ssh "${ssh_opts[@]}" "${user}@${host}" bash -s <<REMOTE_SCRIPT
+    # Pass dir as a positional argument ($1) and use a quoted heredoc to prevent
+    # local variable expansion. The exclude_script is pre-expanded intentionally.
+    ssh "${ssh_opts[@]}" "${user}@${host}" bash -s -- "$dir" "$exclude_script" <<'REMOTE_SCRIPT'
 set -euo pipefail
-if [ ! -d '$dir' ]; then
+_remote_dir="$1"
+_exclude_args="$2"
+if [ ! -d "$_remote_dir" ]; then
     exit 0
 fi
-cd '$dir'
-find . $exclude_script \( -type f -o -type l \) -print0 2>/dev/null \\
+cd "$_remote_dir"
+eval "find . $_exclude_args \( -type f -o -type l \) -print0" 2>/dev/null \
     | while IFS= read -r -d '' file; do
-        relpath="\${file#./}"
-        if [ -L "\$file" ]; then
+        relpath="${file#./}"
+        if [ -L "$file" ]; then
             ftype="l"
-            mtime=\$(stat -c '%Y' "\$file" 2>/dev/null || echo 0)
+            mtime=$(stat -c '%Y' "$file" 2>/dev/null || echo 0)
             size=0
         else
             ftype="f"
-            mtime=\$(stat -c '%Y' "\$file" 2>/dev/null || echo 0)
-            size=\$(stat -c '%s' "\$file" 2>/dev/null || echo 0)
+            mtime=$(stat -c '%Y' "$file" 2>/dev/null || echo 0)
+            size=$(stat -c '%s' "$file" 2>/dev/null || echo 0)
         fi
-        printf '%s\t%s\t%s\t%s\n' "\$relpath" "\$mtime" "\$size" "\$ftype"
-    done | sort -t\$'\t' -k1,1
+        printf '%s\t%s\t%s\t%s\n' "$relpath" "$mtime" "$size" "$ftype"
+    done | sort -t$'\t' -k1,1
 REMOTE_SCRIPT
 }
 
@@ -143,7 +146,7 @@ remote_file_checksum() {
         ssh_opts+=(-i "$SSH_IDENTITY")
     fi
 
-    ssh "${ssh_opts[@]}" "${user}@${host}" "md5sum '$filepath' 2>/dev/null | cut -d' ' -f1" 2>/dev/null || echo ""
+    ssh "${ssh_opts[@]}" "${user}@${host}" "md5sum $(shell_quote "$filepath") 2>/dev/null | cut -d' ' -f1" 2>/dev/null || echo ""
 }
 
 # ============================================================================
@@ -256,7 +259,8 @@ three_way_diff() {
     for path in "${!remote_map[@]}"; do all_paths["$path"]=1; done
 
     # Classify each path
-    for path in $(echo "${!all_paths[@]}" | tr ' ' '\n' | sort); do
+    while IFS= read -r path; do
+        [[ -z "$path" ]] && continue
         local in_prev=0 in_local=0 in_remote=0
         [[ -n "${prev_map[$path]+x}" ]] && in_prev=1
         [[ -n "${local_map[$path]+x}" ]] && in_local=1
@@ -326,7 +330,7 @@ three_way_diff() {
             log_debug "Deleted on both sides: $path"
 
         fi
-    done
+    done < <(printf '%s\n' "${!all_paths[@]}" | sort)
 }
 
 # ============================================================================
@@ -378,12 +382,13 @@ merge_manifests() {
     done <<< "$actions"
 
     # Output merged manifest
-    for path in $(echo "${!merged[@]}" | tr ' ' '\n' | sort); do
+    while IFS= read -r path; do
+        [[ -z "$path" ]] && continue
         local entry="${merged[$path]}"
         local mtime="${entry%%${_FIELD_SEP}*}"
         local rest="${entry#*${_FIELD_SEP}}"
         local size="${rest%%${_FIELD_SEP}*}"
         local ftype="${rest#*${_FIELD_SEP}}"
         printf '%s\t%s\t%s\t%s\n' "$path" "$mtime" "$size" "$ftype"
-    done
+    done < <(printf '%s\n' "${!merged[@]}" | sort)
 }

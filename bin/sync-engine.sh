@@ -126,7 +126,7 @@ execute_push() {
 
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
         log_info "  [DRY-RUN] Would push: $path"
-        (( SYNC_PUSHED++ ))
+        SYNC_PUSHED=$(( SYNC_PUSHED + 1 ))
         return 0
     fi
 
@@ -135,11 +135,11 @@ execute_push() {
     fi
 
     if rsync_push_file "${LOCAL_DIR}/${path}" "$path" 2>/dev/null; then
-        (( SYNC_PUSHED++ ))
+        SYNC_PUSHED=$(( SYNC_PUSHED + 1 ))
         log_debug "  Push successful: $path"
     else
         log_error "  Push failed: $path"
-        (( SYNC_ERRORS++ ))
+        SYNC_ERRORS=$(( SYNC_ERRORS + 1 ))
     fi
 }
 
@@ -150,7 +150,7 @@ execute_pull() {
 
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
         log_info "  [DRY-RUN] Would pull: $path"
-        (( SYNC_PULLED++ ))
+        SYNC_PULLED=$(( SYNC_PULLED + 1 ))
         return 0
     fi
 
@@ -159,11 +159,11 @@ execute_pull() {
     fi
 
     if rsync_pull_file "$path" "${LOCAL_DIR}/${path}" 2>/dev/null; then
-        (( SYNC_PULLED++ ))
+        SYNC_PULLED=$(( SYNC_PULLED + 1 ))
         log_debug "  Pull successful: $path"
     else
         log_error "  Pull failed: $path"
-        (( SYNC_ERRORS++ ))
+        SYNC_ERRORS=$(( SYNC_ERRORS + 1 ))
     fi
 }
 
@@ -174,7 +174,7 @@ execute_delete_local() {
 
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
         log_info "  [DRY-RUN] Would delete local: $path"
-        (( SYNC_DELETED_LOCAL++ ))
+        SYNC_DELETED_LOCAL=$(( SYNC_DELETED_LOCAL + 1 ))
         return 0
     fi
 
@@ -183,7 +183,7 @@ execute_delete_local() {
     fi
 
     local_delete_file "$path"
-    (( SYNC_DELETED_LOCAL++ ))
+    SYNC_DELETED_LOCAL=$(( SYNC_DELETED_LOCAL + 1 ))
     log_debug "  Local delete successful: $path"
 }
 
@@ -194,7 +194,7 @@ execute_delete_remote() {
 
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
         log_info "  [DRY-RUN] Would delete remote: $path"
-        (( SYNC_DELETED_REMOTE++ ))
+        SYNC_DELETED_REMOTE=$(( SYNC_DELETED_REMOTE + 1 ))
         return 0
     fi
 
@@ -203,7 +203,7 @@ execute_delete_remote() {
     fi
 
     remote_delete_file "$path"
-    (( SYNC_DELETED_REMOTE++ ))
+    SYNC_DELETED_REMOTE=$(( SYNC_DELETED_REMOTE + 1 ))
     log_debug "  Remote delete successful: $path"
 }
 
@@ -291,6 +291,12 @@ run_sync() {
     # Step 4: Execute actions
     log_info "Executing sync actions..."
 
+    # Pre-parse manifests once for conflict resolution lookups
+    declare -A _parsed_local=()
+    declare -A _parsed_remote=()
+    parse_manifest "$local_manifest" _parsed_local
+    parse_manifest "$remote_manifest" _parsed_remote
+
     # Process each action
     while IFS=$'\t' read -r action path; do
         [[ -z "$action" ]] && continue
@@ -313,21 +319,14 @@ run_sync() {
                 ;;
 
             CONFLICT)
-                (( SYNC_CONFLICTS++ ))
+                SYNC_CONFLICTS=$(( SYNC_CONFLICTS + 1 ))
 
-                # Get entries for resolution
-                declare -A _tmp_local=()
-                declare -A _tmp_remote=()
-                parse_manifest "$local_manifest" _tmp_local
-                parse_manifest "$remote_manifest" _tmp_remote
-
-                local local_entry="${_tmp_local[$path]:-}"
-                local remote_entry="${_tmp_remote[$path]:-}"
+                local local_entry="${_parsed_local[$path]:-}"
+                local remote_entry="${_parsed_remote[$path]:-}"
 
                 # Verify it's a real conflict (checksum check if enabled)
                 if ! verify_conflict_with_checksum "$path"; then
                     log_info "  Conflict resolved: files are identical (checksum match)"
-                    unset _tmp_local _tmp_remote
                     continue
                 fi
 
@@ -341,12 +340,10 @@ run_sync() {
                     push) execute_push "$path" ;;
                     pull) execute_pull "$path" ;;
                     skip)
-                        (( SYNC_SKIPPED++ ))
+                        SYNC_SKIPPED=$(( SYNC_SKIPPED + 1 ))
                         log_info "  Skipped: $path"
                         ;;
                 esac
-
-                unset _tmp_local _tmp_remote
                 ;;
 
             UNCHANGED)
@@ -354,6 +351,8 @@ run_sync() {
                 ;;
         esac
     done <<< "$actions"
+
+    unset _parsed_local _parsed_remote
 
     # Step 5: Save updated manifest (only if no errors and not dry-run)
     if [[ "${DRY_RUN:-false}" != "true" ]]; then
@@ -382,12 +381,12 @@ run_sync() {
     # Step 7: Run notification hooks
     if (( SYNC_ERRORS > 0 )); then
         if [[ -n "${ON_FAILURE:-}" ]]; then
-            eval "$ON_FAILURE 'Sync completed with $SYNC_ERRORS error(s)'" 2>/dev/null || true
+            bash -c "$ON_FAILURE \"\$1\"" -- "Sync completed with $SYNC_ERRORS error(s)" 2>/dev/null || true
         fi
         return 1
     else
         if [[ -n "${ON_COMPLETE:-}" ]]; then
-            eval "$ON_COMPLETE 'Sync complete: pushed=$SYNC_PUSHED pulled=$SYNC_PULLED'" 2>/dev/null || true
+            bash -c "$ON_COMPLETE \"\$1\"" -- "Sync complete: pushed=$SYNC_PUSHED pulled=$SYNC_PULLED" 2>/dev/null || true
         fi
         return 0
     fi
