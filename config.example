@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# rsync-bidirectional-sync configuration file
+# Copy this to ~/.config/rsync-sync/config (default profile)
+# or ~/.config/rsync-sync/profiles/<name>.conf (named profile)
+
+# ============================================================================
+# REMOTE CONNECTION
+# ============================================================================
+
+# SSH user on remote machine
+REMOTE_USER="user"
+
+# Remote hostname or IP address
+REMOTE_HOST="192.168.1.100"
+
+# SSH port (default: 22)
+REMOTE_PORT=22
+
+# SSH identity file (optional, leave empty to use default)
+SSH_IDENTITY=""
+
+# SSH connection timeout in seconds
+SSH_TIMEOUT=10
+
+# ============================================================================
+# SYNC PATHS
+# ============================================================================
+
+# Local directory to sync (absolute path, no trailing slash)
+LOCAL_DIR="/home/user/sync"
+
+# Remote directory to sync (absolute path, no trailing slash)
+REMOTE_DIR="/home/user/sync"
+
+# ============================================================================
+# SYNC BEHAVIOR
+# ============================================================================
+
+# Conflict resolution strategy when a file is modified on both sides:
+#   newest   - keep the version with the most recent mtime (default)
+#   skip     - leave conflicting files untouched, report them
+#   backup   - back up both versions, apply newest
+#   local    - always prefer local version
+#   remote   - always prefer remote version
+CONFLICT_STRATEGY="newest"
+
+# Propagate file deletions to the other side
+# When true: deleting a file locally will also delete it remotely (and vice versa)
+# When false: deleted files will be re-synced from the other side
+PROPAGATE_DELETES=true
+
+# Create backup before overwriting files during conflict resolution
+BACKUP_ON_CONFLICT=true
+
+# Backup directory (relative to sync dir). Only used when BACKUP_ON_CONFLICT=true
+BACKUP_DIR=".sync-backups"
+
+# ============================================================================
+# RSYNC OPTIONS
+# ============================================================================
+
+# Maximum retry attempts for rsync operations
+MAX_RETRIES=3
+
+# Delay between retries in seconds
+RETRY_DELAY=5
+
+# Rsync timeout for individual transfers (seconds)
+RSYNC_TIMEOUT=30
+
+# Bandwidth limit in KB/s (empty = no limit)
+BANDWIDTH_LIMIT=""
+
+# Maximum file size to sync (e.g., "100M", "1G", empty = no limit)
+MAX_FILE_SIZE=""
+
+# Use checksum verification for conflict detection (slower but more accurate)
+# When false, uses mtime + size comparison
+CHECKSUM_VERIFY=false
+
+# Additional rsync options (appended to rsync command)
+RSYNC_EXTRA_OPTS=""
+
+# ============================================================================
+# EXCLUSION PATTERNS
+# ============================================================================
+
+# Files and directories to exclude from sync
+# Uses rsync pattern syntax
+EXCLUDE_PATTERNS=(
+    ".git/"
+    ".svn/"
+    ".hg/"
+    "*.tmp"
+    "*.swp"
+    "*.swo"
+    "*~"
+    ".DS_Store"
+    "Thumbs.db"
+    "node_modules/"
+    "__pycache__/"
+    "*.pyc"
+    ".sync-backups/"
+    ".sync-state/"
+)
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+
+# Log directory
+LOG_DIR="$HOME/.config/rsync-sync/logs"
+
+# Log level: DEBUG, INFO, WARN, ERROR
+LOG_LEVEL="INFO"
+
+# Maximum number of log files to retain
+MAX_LOG_FILES=10
+
+# Maximum log file size in bytes (10MB default)
+MAX_LOG_SIZE=10485760
+
+# ============================================================================
+# STATE MANAGEMENT
+# ============================================================================
+
+# Directory for storing sync state (manifests, lock files)
+STATE_DIR="$HOME/.config/rsync-sync/state"
+
+# ============================================================================
+# NOTIFICATIONS (optional)
+# ============================================================================
+
+# Command to run on sync completion (receives summary as argument)
+# Example: "notify-send 'Sync Complete'"
+ON_COMPLETE=""
+
+# Command to run on sync failure (receives error message as argument)
+# Example: "notify-send -u critical 'Sync Failed'"
+ON_FAILURE=""
