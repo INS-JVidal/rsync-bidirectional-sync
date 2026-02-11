@@ -34,7 +34,7 @@ sync-client
 ## Installation
 
 ```bash
-git clone <repo-url> rsync-bidirectional-sync
+git clone https://github.com/INS-JVidal/rsync-bidirectional-sync.git rsync-bidirectional-sync
 cd rsync-bidirectional-sync
 ./install.sh
 ```
