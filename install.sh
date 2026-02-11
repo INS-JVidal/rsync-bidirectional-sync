@@ -128,7 +128,7 @@ install_files() {
     step "Installing scripts"
 
     # Copy bin scripts
-    local scripts=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-client.sh")
+    local scripts=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-client.sh" "setup-ssh.sh")
 
     for script in "${scripts[@]}"; do
         local src="${SCRIPT_DIR}/bin/${script}"
@@ -152,6 +152,15 @@ install_files() {
     ln -s "${INSTALL_DIR}/sync-client.sh" "$link"
     chmod +x "$link"
     info "Symlinked: $link -> ${INSTALL_DIR}/sync-client.sh"
+
+    # Create symlink for setup-ssh
+    local ssh_link="${BIN_LINK_DIR}/sync-setup-ssh"
+    if [[ -L "$ssh_link" ]] || [[ -f "$ssh_link" ]]; then
+        rm -f "$ssh_link"
+    fi
+    ln -s "${INSTALL_DIR}/setup-ssh.sh" "$ssh_link"
+    chmod +x "$ssh_link"
+    info "Symlinked: $ssh_link -> ${INSTALL_DIR}/setup-ssh.sh"
 }
 
 # ============================================================================
@@ -284,11 +293,17 @@ uninstall() {
         info "Removed: $INSTALL_DIR"
     fi
 
-    # Remove symlink
+    # Remove symlinks
     local link="${BIN_LINK_DIR}/sync-client"
     if [[ -L "$link" ]]; then
         rm -f "$link"
         info "Removed: $link"
+    fi
+
+    local ssh_link="${BIN_LINK_DIR}/sync-setup-ssh"
+    if [[ -L "$ssh_link" ]]; then
+        rm -f "$ssh_link"
+        info "Removed: $ssh_link"
     fi
 
     # Remove completion
@@ -347,11 +362,11 @@ main() {
     step "Installation complete!"
     echo ""
     echo -e "  ${BOLD}Next steps:${RESET}"
-    echo -e "  1. Edit your configuration:"
-    echo -e "     ${BLUE}\$ nano ~/.config/rsync-sync/config${RESET}"
+    echo -e "  1. Run the guided SSH setup wizard:"
+    echo -e "     ${BLUE}\$ sync-setup-ssh${RESET}"
     echo ""
-    echo -e "  2. Set up SSH key authentication:"
-    echo -e "     ${BLUE}\$ ssh-copy-id -p PORT user@remote-host${RESET}"
+    echo -e "  2. Edit sync paths in your configuration:"
+    echo -e "     ${BLUE}\$ nano ~/.config/rsync-sync/config${RESET}"
     echo ""
     echo -e "  3. Test with a dry run:"
     echo -e "     ${BLUE}\$ sync-client --dry-run${RESET}"
