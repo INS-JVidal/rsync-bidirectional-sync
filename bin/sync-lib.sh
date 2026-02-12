@@ -574,6 +574,28 @@ backup_remote_file() {
     log_debug "Backed up remote: $relative_path"
 }
 
+rotate_backups() {
+    local max_age="${BACKUP_MAX_AGE_DAYS:-30}"
+    local backup_dir="${LOCAL_DIR}/${BACKUP_DIR:-.sync-backups}"
+
+    if [[ "$max_age" -le 0 ]] || [[ ! -d "$backup_dir" ]]; then
+        return 0
+    fi
+
+    local count=0
+    while IFS= read -r -d '' file; do
+        rm -f "$file"
+        (( count++ ))
+    done < <(find "$backup_dir" -type f -mtime +"$max_age" -print0 2>/dev/null)
+
+    # Remove empty directories left behind
+    find "$backup_dir" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+
+    if (( count > 0 )); then
+        log_info "Cleaned up $count backup(s) older than $max_age days"
+    fi
+}
+
 # ============================================================================
 # LOCK FILE MANAGEMENT
 # ============================================================================

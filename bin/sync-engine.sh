@@ -379,6 +379,11 @@ run_sync() {
 
     print_summary "$SYNC_PUSHED" "$SYNC_PULLED" "$SYNC_DELETED_LOCAL" "$SYNC_DELETED_REMOTE" "$SYNC_CONFLICTS" "$SYNC_SKIPPED" "$SYNC_ERRORS" "$elapsed"
 
+    # Step 6b: Rotate old backups
+    if [[ "${BACKUP_ON_CONFLICT:-false}" == "true" ]]; then
+        rotate_backups
+    fi
+
     # Step 7: Run notification hooks
     if (( SYNC_ERRORS > 0 )); then
         if [[ -n "${ON_FAILURE:-}" ]]; then

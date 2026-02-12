@@ -55,6 +55,9 @@ BACKUP_ON_CONFLICT=true
 # Backup directory (relative to sync dir). Only used when BACKUP_ON_CONFLICT=true
 BACKUP_DIR=".sync-backups"
 
+# Auto-delete backups older than this many days (0 to disable cleanup)
+BACKUP_MAX_AGE_DAYS=30
+
 # ============================================================================
 # RSYNC OPTIONS
 # ============================================================================
