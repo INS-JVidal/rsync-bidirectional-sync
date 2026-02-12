@@ -390,11 +390,6 @@ build_rsync_opts() {
         opts+=(--dry-run)
     fi
 
-    # Add SSH command
-    local ssh_cmd
-    ssh_cmd=$(build_ssh_cmd)
-    opts+=(-e "$ssh_cmd")
-
     echo "${opts[@]}"
 }
 
@@ -435,10 +430,13 @@ robust_rsync() {
             sleep "$retry_delay"
         fi
 
+        local ssh_cmd
+        ssh_cmd=$(build_ssh_cmd)
+
         log_debug "rsync $rsync_opts $exclusions ${RSYNC_EXTRA_OPTS:-} $src $dst"
 
         # shellcheck disable=SC2086
-        if rsync $rsync_opts $exclusions ${RSYNC_EXTRA_OPTS:-} "$src" "$dst"; then
+        if rsync $rsync_opts $exclusions ${RSYNC_EXTRA_OPTS:-} -e "$ssh_cmd" "$src" "$dst"; then
             log_debug "rsync completed successfully"
             return 0
         fi
@@ -460,6 +458,9 @@ rsync_push_file() {
     local rsync_opts
     rsync_opts=$(build_rsync_opts)
 
+    local ssh_cmd
+    ssh_cmd=$(build_ssh_cmd)
+
     log_debug "Pushing: $remote_relative"
 
     # Ensure remote parent directory exists
@@ -471,7 +472,7 @@ rsync_push_file() {
         "mkdir -p '$remote_parent'" 2>/dev/null || true
 
     # shellcheck disable=SC2086
-    rsync $rsync_opts "$local_path" "$remote_dest"
+    rsync $rsync_opts -e "$ssh_cmd" "$local_path" "$remote_dest"
 }
 
 # Transfer a single file from remote
@@ -483,6 +484,9 @@ rsync_pull_file() {
     local rsync_opts
     rsync_opts=$(build_rsync_opts)
 
+    local ssh_cmd
+    ssh_cmd=$(build_ssh_cmd)
+
     log_debug "Pulling: $remote_relative"
 
     # Ensure local parent directory exists
@@ -491,7 +495,7 @@ rsync_pull_file() {
     mkdir -p "$local_parent"
 
     # shellcheck disable=SC2086
-    rsync $rsync_opts "$remote_src" "$local_path"
+    rsync $rsync_opts -e "$ssh_cmd" "$remote_src" "$local_path"
 }
 
 # Delete a file on remote
