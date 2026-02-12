@@ -622,7 +622,7 @@ cleanup() {
     fi
     _CLEANUP_DONE=1
 
-    log_warn "Cleaning up..."
+    log_info "Cleaning up..."
     release_lock
     log_info "Cleanup complete"
 }
