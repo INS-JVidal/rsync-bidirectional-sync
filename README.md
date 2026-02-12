@@ -17,7 +17,7 @@ Unlike simple "pull then push" approaches, this tool uses a **three-way diff** a
 
 ```bash
 # 1. Install
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/INS-JVidal/rsync-bidirectional-sync/main/install-remote.sh | bash
 
 # 2. Configure
 nano ~/.config/rsync-sync/config
@@ -37,15 +37,22 @@ sync-client
 
 ## Installation
 
+### Quick install
+
 ```bash
-git clone https://github.com/INS-JVidal/rsync-bidirectional-sync.git rsync-bidirectional-sync
+curl -fsSL https://raw.githubusercontent.com/INS-JVidal/rsync-bidirectional-sync/main/install-remote.sh | bash
+```
+
+### Install from source
+
+```bash
+git clone https://github.com/INS-JVidal/rsync-bidirectional-sync.git
 cd rsync-bidirectional-sync
 ./install.sh
 ```
 
 The installer:
-- Copies scripts to `~/.local/share/rsync-sync/`
-- Creates a `sync-client` symlink in `~/.local/bin/`
+- Copies scripts directly to `~/.local/bin/`
 - Creates configuration directory at `~/.config/rsync-sync/`
 - Sets up bash completion
 - Adds `~/.local/bin` to PATH if needed
@@ -60,6 +67,10 @@ The installer:
 ### Uninstall
 
 ```bash
+# If installed via curl
+curl -fsSL https://raw.githubusercontent.com/INS-JVidal/rsync-bidirectional-sync/main/install-remote.sh | bash -s -- --uninstall
+
+# If installed from source
 ./install.sh --uninstall
 ```
 

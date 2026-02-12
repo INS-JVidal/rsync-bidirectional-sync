@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# install.sh - Local installer for rsync-bidirectional-sync
-# Copies scripts directly to ~/.local/bin/, sets up config and completion
+# install-remote.sh - Remote installer for rsync-bidirectional-sync
+# Usage: curl -fsSL https://raw.githubusercontent.com/INS-JVidal/rsync-bidirectional-sync/main/install-remote.sh | bash
+#
+# Supports: --uninstall flag to remove installed files
 
 set -euo pipefail
 
@@ -30,7 +32,16 @@ step()  { printf "\n${BOLD}${BLUE}>> %s${RESET}\n" "$*"; }
 
 BIN_DIR="$HOME/.local/bin"
 CONFIG_DIR="$HOME/.config/rsync-sync"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_URL="https://raw.githubusercontent.com/INS-JVidal/rsync-bidirectional-sync/main"
+
+# Scripts to download from bin/
+SCRIPTS=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-client.sh" "sync-templates.sh" "setup-ssh.sh")
+
+# Entry points that get renamed (source -> target)
+declare -A ENTRY_POINTS=(
+    ["sync-client.sh"]="sync-client"
+    ["setup-ssh.sh"]="sync-setup-ssh"
+)
 
 # ============================================================================
 # REQUIREMENT CHECKS
@@ -41,7 +52,6 @@ check_requirements() {
 
     local errors=0
 
-    # Bash version
     if (( BASH_VERSINFO[0] >= 4 )); then
         info "Bash ${BASH_VERSION} (4.0+ required)"
     else
@@ -49,17 +59,13 @@ check_requirements() {
         (( errors++ ))
     fi
 
-    # rsync
     if command -v rsync &>/dev/null; then
-        local rsync_ver
-        rsync_ver=$(rsync --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
-        info "rsync $rsync_ver found"
+        info "rsync found"
     else
         error "rsync is not installed. Install: sudo apt install rsync"
         (( errors++ ))
     fi
 
-    # ssh
     if command -v ssh &>/dev/null; then
         info "ssh found"
     else
@@ -67,22 +73,10 @@ check_requirements() {
         (( errors++ ))
     fi
 
-    # md5sum (for checksum verification)
-    if command -v md5sum &>/dev/null; then
-        info "md5sum found"
-    else
-        warn "md5sum not found - checksum verification will be unavailable"
+    if ! command -v curl &>/dev/null; then
+        error "curl is required for remote install"
+        (( errors++ ))
     fi
-
-    # find, stat, sort
-    for cmd in find stat sort; do
-        if command -v "$cmd" &>/dev/null; then
-            info "$cmd found"
-        else
-            error "$cmd is not installed"
-            (( errors++ ))
-        fi
-    done
 
     if (( errors > 0 )); then
         error "Requirements check failed with $errors error(s)"
@@ -90,85 +84,34 @@ check_requirements() {
     fi
 
     info "All requirements satisfied"
-    return 0
 }
 
 # ============================================================================
-# DIRECTORY CREATION
+# DOWNLOAD & INSTALL
 # ============================================================================
 
-create_directories() {
-    step "Creating directories"
+install_scripts() {
+    step "Downloading and installing scripts"
 
-    local dirs=(
-        "$BIN_DIR"
-        "$CONFIG_DIR"
-        "$CONFIG_DIR/profiles"
-        "$CONFIG_DIR/state"
-        "$CONFIG_DIR/logs"
-    )
+    mkdir -p "$BIN_DIR"
 
-    for dir in "${dirs[@]}"; do
-        if [[ -d "$dir" ]]; then
-            info "Exists: $dir"
-        else
-            mkdir -p "$dir"
-            info "Created: $dir"
+    for script in "${SCRIPTS[@]}"; do
+        local url="${BASE_URL}/bin/${script}"
+        local target="${BIN_DIR}/${script}"
+
+        # Rename entry points
+        if [[ -n "${ENTRY_POINTS[$script]:-}" ]]; then
+            target="${BIN_DIR}/${ENTRY_POINTS[$script]}"
         fi
-    done
-}
 
-# ============================================================================
-# FILE INSTALLATION
-# ============================================================================
-
-install_files() {
-    step "Installing scripts"
-
-    # Library scripts (keep original names)
-    local lib_scripts=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-templates.sh")
-
-    for script in "${lib_scripts[@]}"; do
-        local src="${SCRIPT_DIR}/bin/${script}"
-        local dst="${BIN_DIR}/${script}"
-
-        if [[ ! -f "$src" ]]; then
-            error "Source file not found: $src"
+        info "Downloading: $script"
+        if ! curl -fsSL "$url" -o "$target"; then
+            error "Failed to download: $url"
             return 1
         fi
-
-        cp "$src" "$dst"
-        chmod +x "$dst"
-        info "Installed: $dst"
+        chmod +x "$target"
+        info "Installed: $target"
     done
-
-    # Entry points (rename, drop .sh)
-    local -A entry_points=(
-        ["sync-client.sh"]="sync-client"
-        ["setup-ssh.sh"]="sync-setup-ssh"
-    )
-
-    for src_name in "${!entry_points[@]}"; do
-        local dst_name="${entry_points[$src_name]}"
-        local src="${SCRIPT_DIR}/bin/${src_name}"
-        local dst="${BIN_DIR}/${dst_name}"
-
-        if [[ ! -f "$src" ]]; then
-            error "Source file not found: $src"
-            return 1
-        fi
-
-        cp "$src" "$dst"
-        chmod +x "$dst"
-        info "Installed: $dst"
-    done
-
-    # Clean up legacy install dir if it exists
-    local legacy_dir="$HOME/.local/share/rsync-sync"
-    if [[ -d "$legacy_dir" ]]; then
-        rm -rf "$legacy_dir"
-        info "Removed legacy dir: $legacy_dir"
-    fi
 }
 
 # ============================================================================
@@ -178,16 +121,19 @@ install_files() {
 setup_config() {
     step "Setting up configuration"
 
-    local config_file="${CONFIG_DIR}/config"
+    mkdir -p "$CONFIG_DIR" "$CONFIG_DIR/profiles" "$CONFIG_DIR/state" "$CONFIG_DIR/logs"
 
+    local config_file="${CONFIG_DIR}/config"
     if [[ -f "$config_file" ]]; then
         info "Configuration already exists: $config_file"
-        info "Skipping (not overwriting existing config)"
     else
-        cp "${SCRIPT_DIR}/config.example" "$config_file"
-        chmod 600 "$config_file"
-        info "Created: $config_file"
-        warn "Edit this file with your remote connection details!"
+        if curl -fsSL "${BASE_URL}/config.example" -o "$config_file"; then
+            chmod 600 "$config_file"
+            info "Created: $config_file"
+            warn "Edit this file with your remote connection details!"
+        else
+            warn "Could not download config.example"
+        fi
     fi
 }
 
@@ -198,7 +144,6 @@ setup_config() {
 setup_path() {
     step "Setting up PATH"
 
-    # Check if BIN_DIR is already in PATH
     if echo "$PATH" | tr ':' '\n' | grep -q "^${BIN_DIR}$"; then
         info "$BIN_DIR is already in PATH"
         return 0
@@ -207,7 +152,6 @@ setup_path() {
     local path_line="export PATH=\"\$HOME/.local/bin:\$PATH\""
     local shells_updated=0
 
-    # Try each shell config
     for rc_file in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
         if [[ -f "$rc_file" ]]; then
             if grep -q '.local/bin' "$rc_file" 2>/dev/null; then
@@ -250,7 +194,6 @@ _sync_client() {
 
     case "$prev" in
         -p|--profile)
-            # Complete with available profiles
             local config_dir="$HOME/.config/rsync-sync/profiles"
             if [[ -d "$config_dir" ]]; then
                 local profiles
@@ -282,7 +225,6 @@ COMPLETION
 
     info "Created: ${completion_dir}/sync-client"
 
-    # Source it in bashrc if not already
     local bashrc="$HOME/.bashrc"
     if [[ -f "$bashrc" ]] && ! grep -q 'bash-completion/completions/sync-client' "$bashrc" 2>/dev/null; then
         echo "" >> "$bashrc"
@@ -300,28 +242,29 @@ uninstall() {
     step "Uninstalling rsync-bidirectional-sync"
 
     # Remove scripts from BIN_DIR
-    local files=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-templates.sh" "sync-client" "sync-setup-ssh")
-
-    for f in "${files[@]}"; do
-        local target="${BIN_DIR}/${f}"
-        if [[ -f "$target" ]] || [[ -L "$target" ]]; then
+    for script in "${SCRIPTS[@]}"; do
+        local target="${BIN_DIR}/${script}"
+        if [[ -n "${ENTRY_POINTS[$script]:-}" ]]; then
+            target="${BIN_DIR}/${ENTRY_POINTS[$script]}"
+        fi
+        if [[ -f "$target" ]]; then
             rm -f "$target"
             info "Removed: $target"
         fi
     done
-
-    # Remove legacy install dir if it exists
-    local legacy_dir="$HOME/.local/share/rsync-sync"
-    if [[ -d "$legacy_dir" ]]; then
-        rm -rf "$legacy_dir"
-        info "Removed legacy dir: $legacy_dir"
-    fi
 
     # Remove completion
     local completion="${HOME}/.local/share/bash-completion/completions/sync-client"
     if [[ -f "$completion" ]]; then
         rm -f "$completion"
         info "Removed: $completion"
+    fi
+
+    # Clean up legacy install dir if it exists
+    local legacy_dir="$HOME/.local/share/rsync-sync"
+    if [[ -d "$legacy_dir" ]]; then
+        rm -rf "$legacy_dir"
+        info "Removed legacy dir: $legacy_dir"
     fi
 
     warn "Configuration preserved at: $CONFIG_DIR"
@@ -335,18 +278,17 @@ uninstall() {
 
 main() {
     echo ""
-    echo -e "${BOLD}rsync-bidirectional-sync Installer${RESET}"
-    echo -e "${BOLD}====================================${RESET}"
+    echo -e "${BOLD}rsync-bidirectional-sync Remote Installer${RESET}"
+    echo -e "${BOLD}===========================================${RESET}"
     echo ""
 
-    # Handle uninstall flag
     if [[ "${1:-}" == "--uninstall" ]]; then
         uninstall
         exit 0
     fi
 
     if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
-        echo "Usage: install.sh [OPTIONS]"
+        echo "Usage: install-remote.sh [OPTIONS]"
         echo ""
         echo "Options:"
         echo "  --uninstall    Remove installed files"
@@ -355,37 +297,26 @@ main() {
         echo "Installs to:"
         echo "  Scripts:  $BIN_DIR/"
         echo "  Config:   $CONFIG_DIR/config"
-        echo "  State:    $CONFIG_DIR/state/"
-        echo "  Logs:     $CONFIG_DIR/logs/"
         exit 0
     fi
 
-    # Run installation steps
     check_requirements || exit 1
-    create_directories
-    install_files
+    install_scripts || exit 1
     setup_config
     setup_path
     setup_completion
 
-    # Final message
     step "Installation complete!"
     echo ""
     echo -e "  ${BOLD}Next steps:${RESET}"
-    echo -e "  1. Run the guided SSH setup wizard:"
-    echo -e "     ${BLUE}\$ sync-setup-ssh${RESET}"
-    echo ""
-    echo -e "  2. Edit sync paths in your configuration:"
+    echo -e "  1. Edit your configuration:"
     echo -e "     ${BLUE}\$ nano ~/.config/rsync-sync/config${RESET}"
+    echo ""
+    echo -e "  2. (Optional) Set up SSH keys:"
+    echo -e "     ${BLUE}\$ sync-setup-ssh${RESET}"
     echo ""
     echo -e "  3. Test with a dry run:"
     echo -e "     ${BLUE}\$ sync-client --dry-run${RESET}"
-    echo ""
-    echo -e "  4. Run your first sync:"
-    echo -e "     ${BLUE}\$ sync-client${RESET}"
-    echo ""
-    echo -e "  5. Check status anytime:"
-    echo -e "     ${BLUE}\$ sync-client status${RESET}"
     echo ""
     echo -e "  For help: ${BLUE}sync-client --help${RESET}"
     echo ""
