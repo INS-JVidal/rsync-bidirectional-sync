@@ -31,7 +31,8 @@ PROFILE_NAME="default"
 DRY_RUN="false"
 VERBOSE="false"
 FORCE="false"
-ACTION="sync"   # sync, status, reset-state
+ACTION="sync"   # sync, status, reset-state, delete-backups
+DELETE_NOW="false"
 
 # ============================================================================
 # USAGE / HELP
@@ -48,7 +49,7 @@ ${C_BOLD}COMMANDS:${C_RESET}
     sync            Run bidirectional sync (default)
     status          Show what would change without syncing
     reset-state     Clear sync state (next sync treated as first sync)
-    delete-backups  Delete backups older than BACKUP_MAX_AGE_DAYS
+    delete-backups  Delete backups older than BACKUP_MAX_AGE_DAYS (--now for all)
 
 ${C_BOLD}OPTIONS:${C_RESET}
     -p, --profile NAME    Use named profile (default: \"default\")
@@ -156,6 +157,11 @@ parse_args() {
 
             --delete-backups|delete-backups)
                 ACTION="delete-backups"
+                shift
+                ;;
+
+            --now)
+                DELETE_NOW="true"
                 shift
                 ;;
 
@@ -375,7 +381,32 @@ main() {
             ;;
 
         delete-backups)
-            rotate_backups
+            if [[ "$DELETE_NOW" == "true" ]]; then
+                local backup_dir="${LOCAL_DIR}/${BACKUP_DIR:-.sync-backups}"
+                if [[ ! -d "$backup_dir" ]]; then
+                    log_info "No backup directory found: $backup_dir"
+                    exit 0
+                fi
+                local count
+                count=$(find "$backup_dir" -type f 2>/dev/null | wc -l)
+                if (( count == 0 )); then
+                    log_info "No backups to delete"
+                    exit 0
+                fi
+                if [[ "$FORCE" != "true" ]]; then
+                    echo "This will delete $count backup file(s) in $backup_dir"
+                    read -r -p "Continue? [y/N] " confirm
+                    if [[ "$confirm" != [yY] ]]; then
+                        log_info "Aborted"
+                        exit 0
+                    fi
+                fi
+                find "$backup_dir" -type f -delete 2>/dev/null
+                find "$backup_dir" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+                log_info "Deleted $count backup file(s)"
+            else
+                rotate_backups
+            fi
             ;;
 
         *)
