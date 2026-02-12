@@ -487,7 +487,7 @@ rsync_pull_file() {
     local ssh_cmd
     ssh_cmd=$(build_ssh_cmd)
 
-    log_info "DEBUG pull cmd: rsync $rsync_opts -e \"$ssh_cmd\" \"$remote_src\" \"$local_path\""
+    log_debug "Pulling: $remote_relative"
 
     # Ensure local parent directory exists
     local local_parent
@@ -495,10 +495,7 @@ rsync_pull_file() {
     mkdir -p "$local_parent"
 
     # shellcheck disable=SC2086
-    local rc=0
-    rsync $rsync_opts -e "$ssh_cmd" "$remote_src" "$local_path" || rc=$?
-    log_info "DEBUG rsync exit code: $rc"
-    return $rc
+    rsync $rsync_opts -e "$ssh_cmd" "$remote_src" "$local_path"
 }
 
 # Delete a file on remote
