@@ -134,7 +134,7 @@ execute_push() {
         backup_remote_file "$path"
     fi
 
-    if rsync_push_file "${LOCAL_DIR}/${path}" "$path" 2>/dev/null; then
+    if rsync_push_file "${LOCAL_DIR}/${path}" "$path"; then
         (( SYNC_PUSHED++ ))
         log_debug "  Push successful: $path"
     else
@@ -158,7 +158,7 @@ execute_pull() {
         backup_local_file "$path"
     fi
 
-    if rsync_pull_file "$path" "${LOCAL_DIR}/${path}" 2>/dev/null; then
+    if rsync_pull_file "$path" "${LOCAL_DIR}/${path}"; then
         (( SYNC_PULLED++ ))
         log_debug "  Pull successful: $path"
     else
