@@ -233,14 +233,14 @@ run_sync() {
     local local_manifest
     local_manifest=$(generate_local_manifest "$LOCAL_DIR")
     local local_count
-    local_count=$(echo "$local_manifest" | grep -c '[^[:space:]]' || echo 0)
+    local_count=$(echo "$local_manifest" | grep -c '[^[:space:]]' || true)
     log_info "  Found $local_count local files"
 
     log_info "Scanning remote files..."
     local remote_manifest
     remote_manifest=$(generate_remote_manifest "$REMOTE_USER" "$REMOTE_HOST" "${REMOTE_PORT:-22}" "$REMOTE_DIR")
     local remote_count
-    remote_count=$(echo "$remote_manifest" | grep -c '[^[:space:]]' || echo 0)
+    remote_count=$(echo "$remote_manifest" | grep -c '[^[:space:]]' || true)
     log_info "  Found $remote_count remote files"
 
     # Step 2: Load previous manifest
@@ -262,12 +262,12 @@ run_sync() {
 
     # Count actions
     local push_count pull_count delete_local_count delete_remote_count conflict_count unchanged_count
-    push_count=$(echo "$actions" | grep -c '^PUSH' || echo 0)
-    pull_count=$(echo "$actions" | grep -c '^PULL' || echo 0)
-    delete_local_count=$(echo "$actions" | grep -c '^DELETE_LOCAL' || echo 0)
-    delete_remote_count=$(echo "$actions" | grep -c '^DELETE_REMOTE' || echo 0)
-    conflict_count=$(echo "$actions" | grep -c '^CONFLICT' || echo 0)
-    unchanged_count=$(echo "$actions" | grep -c '^UNCHANGED' || echo 0)
+    push_count=$(echo "$actions" | grep -c '^PUSH' || true)
+    pull_count=$(echo "$actions" | grep -c '^PULL' || true)
+    delete_local_count=$(echo "$actions" | grep -c '^DELETE_LOCAL' || true)
+    delete_remote_count=$(echo "$actions" | grep -c '^DELETE_REMOTE' || true)
+    conflict_count=$(echo "$actions" | grep -c '^CONFLICT' || true)
+    unchanged_count=$(echo "$actions" | grep -c '^UNCHANGED' || true)
 
     log_info "  Push: $push_count | Pull: $pull_count | Del local: $delete_local_count | Del remote: $delete_remote_count | Conflicts: $conflict_count | Unchanged: $unchanged_count"
 
