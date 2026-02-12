@@ -128,7 +128,7 @@ install_files() {
     step "Installing scripts"
 
     # Copy bin scripts
-    local scripts=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-client.sh" "setup-ssh.sh")
+    local scripts=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-client.sh" "sync-templates.sh" "setup-ssh.sh")
 
     for script in "${scripts[@]}"; do
         local src="${SCRIPT_DIR}/bin/${script}"
@@ -237,8 +237,8 @@ _sync_client() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    commands="sync status reset-state"
-    opts="-p --profile -n --dry-run -v --verbose -f --force -c --config -h --help -V --version"
+    commands="sync status reset-state show-exclusions init-syncignore"
+    opts="-p --profile -n --dry-run -v --verbose -f --force -c --config --show-exclusions --init-syncignore -h --help -V --version"
 
     case "$prev" in
         -p|--profile)
@@ -255,6 +255,10 @@ _sync_client() {
             ;;
         -c|--config)
             COMPREPLY=( $(compgen -f -- "$cur") )
+            return 0
+            ;;
+        --init-syncignore|init-syncignore)
+            COMPREPLY=( $(compgen -W "default python java javascript php teaching" -- "$cur") )
             return 0
             ;;
     esac
