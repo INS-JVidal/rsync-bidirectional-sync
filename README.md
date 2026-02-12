@@ -53,6 +53,7 @@ cd rsync-bidirectional-sync
 
 The installer:
 - Copies scripts directly to `~/.local/bin/`
+- Injects the git version (e.g., `v1.0.0-3-gabcdef`) into installed scripts
 - Creates configuration directory at `~/.config/rsync-sync/`
 - Sets up bash completion
 - Adds `~/.local/bin` to PATH if needed
@@ -227,6 +228,7 @@ sync-client -p work -v -n
 - **`.syncignore` delete protection** - Files matching `.syncignore` rules are protected from deletion propagation
 - **State preservation on error** - Manifest only saved after full success
 - **Retry logic** - Configurable retries with backoff for network issues
+- **Version mismatch detection** - Pre-flight checks warn if local and remote run different versions (cached daily)
 
 ## File Structure
 
