@@ -390,11 +390,6 @@ build_rsync_opts() {
         opts+=(--dry-run)
     fi
 
-    # Add SSH command
-    local ssh_cmd
-    ssh_cmd=$(build_ssh_cmd)
-    opts+=(-e "$ssh_cmd")
-
     echo "${opts[@]}"
 }
 
@@ -435,10 +430,13 @@ robust_rsync() {
             sleep "$retry_delay"
         fi
 
+        local ssh_cmd
+        ssh_cmd=$(build_ssh_cmd)
+
         log_debug "rsync $rsync_opts $exclusions ${RSYNC_EXTRA_OPTS:-} $src $dst"
 
         # shellcheck disable=SC2086
-        if rsync $rsync_opts $exclusions ${RSYNC_EXTRA_OPTS:-} "$src" "$dst"; then
+        if rsync $rsync_opts $exclusions ${RSYNC_EXTRA_OPTS:-} -e "$ssh_cmd" "$src" "$dst"; then
             log_debug "rsync completed successfully"
             return 0
         fi

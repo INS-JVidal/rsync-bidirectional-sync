@@ -126,7 +126,7 @@ install_files() {
     step "Installing scripts"
 
     # Library scripts (keep original names)
-    local lib_scripts=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-templates.sh")
+    local lib_scripts=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh")
 
     for script in "${lib_scripts[@]}"; do
         local src="${SCRIPT_DIR}/bin/${script}"
@@ -300,7 +300,7 @@ uninstall() {
     step "Uninstalling rsync-bidirectional-sync"
 
     # Remove scripts from BIN_DIR
-    local files=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-templates.sh" "sync-client" "sync-setup-ssh")
+    local files=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-client" "sync-setup-ssh")
 
     for f in "${files[@]}"; do
         local target="${BIN_DIR}/${f}"

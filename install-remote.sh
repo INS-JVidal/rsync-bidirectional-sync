@@ -32,7 +32,8 @@ step()  { printf "\n${BOLD}${BLUE}>> %s${RESET}\n" "$*"; }
 
 BIN_DIR="$HOME/.local/bin"
 CONFIG_DIR="$HOME/.config/rsync-sync"
-BASE_URL="https://raw.githubusercontent.com/INS-JVidal/rsync-bidirectional-sync/main"
+BRANCH="${BRANCH:-main}"
+BASE_URL="https://raw.githubusercontent.com/INS-JVidal/rsync-bidirectional-sync/${BRANCH}"
 
 # Scripts to download from bin/
 SCRIPTS=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-client.sh" "setup-ssh.sh")
