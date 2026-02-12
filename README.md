@@ -11,6 +11,7 @@ Unlike simple "pull then push" approaches, this tool uses a **three-way diff** a
 3. **Smart classification** - Each file is classified as: new, modified, deleted, or unchanged on each side
 4. **Conflict resolution** - Files modified on both sides are handled according to your configured strategy
 5. **Safe deletions** - Deletions are only propagated when the file existed in the previous manifest (so new files are never accidentally deleted)
+6. **Per-directory exclusions** - `.syncignore` files (rsync filter syntax) let you exclude files from sync on a per-directory basis, with rules inherited by subdirectories
 
 ## Quick Start
 
@@ -21,13 +22,16 @@ Unlike simple "pull then push" approaches, this tool uses a **three-way diff** a
 # 2. Configure
 nano ~/.config/rsync-sync/config
 
-# 3. Set up SSH keys
+# 3. (Optional) Create .syncignore
+sync-client init-syncignore python
+
+# 4. Set up SSH keys
 ssh-copy-id user@remote-host
 
-# 4. Test
+# 5. Test
 sync-client --dry-run
 
-# 5. Sync
+# 6. Sync
 sync-client
 ```
 
@@ -100,6 +104,48 @@ sync-client -p work sync
 
 Each profile maintains its own sync state, lock file, and logs.
 
+### `.syncignore`
+
+Exclude files from sync on a per-directory basis using `.syncignore` files with rsync filter syntax.
+
+**Quick start:**
+
+```bash
+# Generate a .syncignore from a built-in template
+sync-client init-syncignore python
+
+# Edit to taste
+nano .syncignore
+
+# Verify what's excluded
+sync-client --show-exclusions
+
+# Sync as usual
+sync-client
+```
+
+**Syntax:**
+
+| Pattern | Meaning |
+|---------|---------|
+| `*.log` | Exclude files matching pattern |
+| `+ important.log` | Force-include (override previous excludes) |
+| `build/` | Exclude directory only |
+| `# comment` | Comment line |
+
+> **Note:** Unlike `.gitignore`, include syntax uses `+ pattern` not `!pattern`.
+
+**Built-in templates:** `default`, `python`, `java`, `javascript`, `php`, `teaching`
+
+**Configuration toggles:**
+
+```bash
+USE_SYNCIGNORE=true                # Enable .syncignore support (default: true)
+SYNCIGNORE_FILENAME=".syncignore"  # Custom filename (default: .syncignore)
+```
+
+`.syncignore` files are synced to both sides by default so exclusion rules stay consistent.
+
 ## Usage
 
 ```bash
@@ -132,6 +178,8 @@ sync-client -p work -v -n
 | `sync` | Run bidirectional sync (default) |
 | `status` | Show pending changes without syncing |
 | `reset-state` | Clear manifest, treat next sync as first sync |
+| `show-exclusions` | Show all active exclusion rules |
+| `init-syncignore [TPL]` | Create `.syncignore` from template |
 
 ### Options
 
@@ -142,6 +190,8 @@ sync-client -p work -v -n
 | `-v, --verbose` | DEBUG-level logging |
 | `-f, --force` | Skip confirmation prompts |
 | `-c, --config FILE` | Use specific config file |
+| `--show-exclusions` | Show all active exclusion rules and exit |
+| `--init-syncignore [TPL]` | Create `.syncignore` (templates: default, python, java, javascript, php, teaching) |
 | `-h, --help` | Show help |
 | `-V, --version` | Show version |
 
@@ -163,6 +213,7 @@ sync-client -p work -v -n
 - **Backup on conflict** - Optional backup before overwriting
 - **Dry-run mode** - Preview all changes safely
 - **Partial transfer resume** - rsync `--partial` flag for interrupted transfers
+- **`.syncignore` delete protection** - Files matching `.syncignore` rules are protected from deletion propagation
 - **State preservation on error** - Manifest only saved after full success
 - **Retry logic** - Configurable retries with backoff for network issues
 
