@@ -39,7 +39,7 @@ ACTION="sync"   # sync, status, reset-state
 
 usage() {
     cat <<EOF
-${C_BOLD}rsync-bidirectional-sync v${SYNC_VERSION}${C_RESET}
+${C_BOLD}rsync-bidirectional-sync ${SYNC_VERSION}${C_RESET}
 Robust bidirectional file synchronization using rsync
 
 ${C_BOLD}USAGE:${C_RESET}
@@ -85,7 +85,7 @@ EOF
 }
 
 version() {
-    echo "rsync-bidirectional-sync v${SYNC_VERSION}"
+    echo "rsync-bidirectional-sync ${SYNC_VERSION}"
 }
 
 # ============================================================================
