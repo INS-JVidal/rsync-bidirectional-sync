@@ -242,6 +242,48 @@ preflight_checks() {
     # Check remote directory
     check_remote_dir "$REMOTE_USER" "$REMOTE_HOST" "${REMOTE_PORT:-22}" "$REMOTE_DIR"
 
+    # Check version mismatch with remote (cached: once per day per profile)
+    local version_cache_dir="${STATE_DIR:-$HOME/.config/rsync-sync/state}"
+    local version_cache_file="${version_cache_dir}/${PROFILE_NAME:-default}.remote-version"
+    local check_version=true
+
+    if [[ -f "$version_cache_file" ]]; then
+        local cache_age
+        cache_age=$(( $(date +%s) - $(stat -c%Y "$version_cache_file" 2>/dev/null || echo 0) ))
+        if (( cache_age < 86400 )); then
+            check_version=false
+            local cached_remote_version
+            cached_remote_version=$(cat "$version_cache_file")
+            local local_version
+            local_version=$(version)
+            if [[ "$cached_remote_version" != "$local_version" ]]; then
+                log_warn "Version mismatch: local=$local_version remote=$cached_remote_version (cached)"
+            else
+                log_debug "Version match: $local_version (cached)"
+            fi
+        fi
+    fi
+
+    if [[ "$check_version" == true ]]; then
+        local ssh_cmd
+        ssh_cmd=$(build_ssh_cmd)
+        # shellcheck disable=SC2086
+        local remote_version
+        remote_version=$($ssh_cmd "${REMOTE_USER}@${REMOTE_HOST}" "sync-client --version 2>/dev/null" 2>/dev/null || echo "unknown")
+        local local_version
+        local_version=$(version)
+        if [[ "$remote_version" == "unknown" ]]; then
+            log_warn "Could not determine remote sync-client version"
+        elif [[ "$remote_version" != "$local_version" ]]; then
+            log_warn "Version mismatch: local=$local_version remote=$remote_version"
+        else
+            log_debug "Version match: $local_version"
+        fi
+        # Cache the result
+        mkdir -p "$version_cache_dir"
+        echo "$remote_version" > "$version_cache_file"
+    fi
+
     log_info "Pre-flight checks passed"
     return 0
 }

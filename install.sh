@@ -142,6 +142,12 @@ install_files() {
         info "Installed: $dst"
     done
 
+    # Inject git version into sync-lib.sh
+    local version
+    version=$(git describe --tags --always --dirty 2>/dev/null || echo "unknown")
+    sed -i "s/^readonly SYNC_VERSION=.*/readonly SYNC_VERSION=\"$version\"/" "$BIN_DIR/sync-lib.sh"
+    info "Version: $version"
+
     # Entry points (rename, drop .sh)
     local -A entry_points=(
         ["sync-client.sh"]="sync-client"

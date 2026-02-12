@@ -8,7 +8,7 @@ set -euo pipefail
 # VERSION
 # ============================================================================
 
-readonly SYNC_VERSION="1.0.0"
+readonly SYNC_VERSION="1.0.0" # placeholder — overwritten at install time
 
 # ============================================================================
 # COLOR DEFINITIONS

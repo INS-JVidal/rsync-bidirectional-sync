@@ -113,6 +113,19 @@ install_scripts() {
         chmod +x "$target"
         info "Installed: $target"
     done
+
+    # Inject version into sync-lib.sh (use short commit SHA from GitHub API, fall back to branch name)
+    local version
+    local commit_sha
+    commit_sha=$(curl -fsSL "https://api.github.com/repos/INS-JVidal/rsync-bidirectional-sync/commits/${BRANCH}" 2>/dev/null \
+        | grep -m1 '"sha"' | cut -d'"' -f4 | cut -c1-7) || true
+    if [[ -n "$commit_sha" ]]; then
+        version="${BRANCH}-g${commit_sha}"
+    else
+        version="${BRANCH}"
+    fi
+    sed -i "s/^readonly SYNC_VERSION=.*/readonly SYNC_VERSION=\"$version\"/" "$BIN_DIR/sync-lib.sh"
+    info "Version: $version"
 }
 
 # ============================================================================
