@@ -38,8 +38,7 @@ ACTION="sync"   # sync, status, reset-state
 # ============================================================================
 
 usage() {
-    cat <<EOF
-${C_BOLD}rsync-bidirectional-sync ${SYNC_VERSION}${C_RESET}
+    echo -e "${C_BOLD}rsync-bidirectional-sync ${SYNC_VERSION}${C_RESET}
 Robust bidirectional file synchronization using rsync
 
 ${C_BOLD}USAGE:${C_RESET}
@@ -49,9 +48,10 @@ ${C_BOLD}COMMANDS:${C_RESET}
     sync            Run bidirectional sync (default)
     status          Show what would change without syncing
     reset-state     Clear sync state (next sync treated as first sync)
+    delete-backups  Delete backups older than BACKUP_MAX_AGE_DAYS
 
 ${C_BOLD}OPTIONS:${C_RESET}
-    -p, --profile NAME    Use named profile (default: "default")
+    -p, --profile NAME    Use named profile (default: \"default\")
     -n, --dry-run         Show what would happen without making changes
     -v, --verbose         Enable verbose output (DEBUG log level)
     -f, --force           Skip confirmation prompts
@@ -63,7 +63,7 @@ ${C_BOLD}EXAMPLES:${C_RESET}
     sync-client                       # Run sync with default profile
     sync-client status                # Check what needs syncing
     sync-client --dry-run             # Preview sync without changes
-    sync-client -p work sync         # Sync using "work" profile
+    sync-client -p work sync         # Sync using \"work\" profile
     sync-client --verbose --dry-run   # Detailed preview
     sync-client reset-state           # Reset sync state
 
@@ -80,8 +80,7 @@ ${C_BOLD}CONFLICT STRATEGIES:${C_RESET}
     local     Always prefer local version
     remote    Always prefer remote version
 
-For more information, see: docs/USAGE.md
-EOF
+For more information, see: docs/USAGE.md"
 }
 
 version() {
@@ -152,6 +151,11 @@ parse_args() {
 
             reset-state)
                 ACTION="reset-state"
+                shift
+                ;;
+
+            --delete-backups|delete-backups)
+                ACTION="delete-backups"
                 shift
                 ;;
 
@@ -368,6 +372,10 @@ main() {
 
         reset-state)
             reset_state
+            ;;
+
+        delete-backups)
+            rotate_backups
             ;;
 
         *)
