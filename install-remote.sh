@@ -35,7 +35,7 @@ CONFIG_DIR="$HOME/.config/rsync-sync"
 BASE_URL="https://raw.githubusercontent.com/INS-JVidal/rsync-bidirectional-sync/main"
 
 # Scripts to download from bin/
-SCRIPTS=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-client.sh" "sync-templates.sh" "setup-ssh.sh")
+SCRIPTS=("sync-lib.sh" "sync-manifest.sh" "sync-engine.sh" "sync-client.sh" "setup-ssh.sh")
 
 # Entry points that get renamed (source -> target)
 declare -A ENTRY_POINTS=(
